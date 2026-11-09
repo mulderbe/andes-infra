@@ -44,3 +44,9 @@ jobs:
 
       - name: Init
         run: terraform init -input=false
+
+      - name: Plan de destrucción
+        run: terraform plan -destroy -input=false -lock-timeout=5m -out=tfdestroy
+
+      - name: Destroy
+        run: terraform apply -input=false -lock-timeout=5m tfdestroy
