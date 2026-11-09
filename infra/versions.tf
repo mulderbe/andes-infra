@@ -4,7 +4,7 @@ terraform {
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
-      version = "~> 4.50"   # cualquier 4.x desde la 4.50, nunca la 5.0
+      version = "~> 4.50" # cualquier 4.x desde la 4.50, nunca la 5.0
     }
     random = {
       source  = "hashicorp/random"
@@ -22,7 +22,7 @@ terraform {
     storage_account_name = "standestfstate0811"
     container_name       = "tfstate"
     key                  = "andes-dev.tfstate"
-    use_azuread_auth     = true   # entra con Entra ID, no con llaves
+    use_azuread_auth     = true # entra con Entra ID, no con llaves
   }
 }
 
