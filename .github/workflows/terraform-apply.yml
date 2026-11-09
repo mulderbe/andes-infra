@@ -1,0 +1,90 @@
+name: Terraform apply (main)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:        # botón "Run workflow" para lanzarlo a mano
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: terraform-dev
+  cancel-in-progress: false
+
+env:
+  ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+  ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+  ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  ARM_USE_OIDC: "true"
+  TF_VAR_alert_email: ${{ secrets.ALERT_EMAIL }}
+  TF_IN_AUTOMATION: "true"
+
+jobs:
+  plan:
+    name: Plan de main
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra
+    outputs:
+      cambios: ${{ steps.plan.outputs.exitcode }}
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "1.16.5"   # la misma que en el otro workflow
+          terraform_wrapper: false
+
+      - name: Init
+        run: terraform init -input=false
+
+      - name: Plan
+        id: plan
+        run: |
+          set +e
+          terraform plan -input=false -lock-timeout=5m -no-color \
+            -detailed-exitcode -out=tfplan | tee plan.txt
+          code=${PIPESTATUS[0]}
+          echo "exitcode=$code" >> "$GITHUB_OUTPUT"
+          if [ "$code" -eq 1 ]; then exit 1; fi
+
+      - name: Publicar el plan en el resumen
+        run: |
+          echo "## Plan que vas a aprobar" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          cat plan.txt >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+  apply:
+    name: Apply en dev
+    needs: plan
+    if: needs.plan.outputs.cambios == '2'
+    runs-on: ubuntu-latest
+    environment: dev
+    defaults:
+      run:
+        working-directory: infra
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "1.16.6"
+          terraform_wrapper: false
+
+      - name: Init
+        run: terraform init -input=false
+
+      - name: Plan final
+        run: terraform plan -input=false -lock-timeout=5m -out=tfplan
+
+      - name: Apply
+        run: terraform apply -input=false -lock-timeout=5m tfplan
+
+      - name: Mostrar outputs
+        run: terraform output
